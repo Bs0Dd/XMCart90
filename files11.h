@@ -1,0 +1,87 @@
+#ifndef _FILES11_H_
+#define _FILES11_H_
+
+// -------DEC FILES-11 FS format tool (for both BASIC 1.0 and 2.0).
+
+// One zero-word must be here
+const uint16_t zwrd_ptr = 0x200;
+
+// FILES-11 header 1 at 0x3D2
+const uint16_t f11_h1_ptr = 0x3D2;
+const uint8_t f11_h1_data[] = {
+    0x01, 0x00, 0x06, 0x00, 0x4F, 0x8e, 0x42, 0x41, 0x53, 0x49, 0x43
+};
+
+// FILES-11 header 2 at 0x400
+const uint16_t f11_h2_ptr = 0x400;
+const uint8_t f11_h2_data[] = {
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x02
+};
+
+// FILES-11 header 3 at 0x412
+const uint16_t f11_h3_ptr = 0x412;
+const uint8_t f11_h3_data[] = {
+    0x00, 0x00, 0x20, 0x20, 0x20, 0x20, 0x00, 0x08, 0x20, 0x20
+};
+
+// MK90 dumb bootloader at 0x0
+const uint8_t dumb_loader[] = {
+    0xa0, 0x00, 0xdf, 0x09, 0xc0, 0xd7, 0xdf, 0x09, 0x5e, 0xa1, 0xdf, 0x17,
+    0x12, 0x38, 0x00, 0xe8, 0xdf, 0x15, 0xc6, 0x88, 0x02, 0xe8, 0x37, 0x08,
+    0x18, 0x00, 0x0e, 0x0d, 0x0a, 0x20, 0x73, 0x6d, 0x70, 0x20, 0x42, 0x45,
+    0x5a, 0x20, 0x5a, 0x41, 0x47, 0x52, 0x55, 0x5a, 0x5e, 0x49, 0x4b, 0x41,
+    0x00, 0xff, 0x02, 0x94, 0xff, 0x03, 0xdf, 0x09, 0x62, 0x9d, 0xfb, 0x01
+};
+
+static inline void basic_format(uint8_t* cart, DWORD size, bool basic2) {
+    if ((size < 512) || (size % 512 != 0)) {
+        return;
+    }
+    
+    memset(cart, 0x20, 64*1024);
+    
+    memcpy(cart, dumb_loader, sizeof(dumb_loader));
+    
+    uint8_t blocks = size / 512;
+    if (blocks >= 5) { // 1 bootloader block, 3 FS blocks, 1 free block.
+        
+        cart[zwrd_ptr] = 0;
+        cart[zwrd_ptr+1] = 0;
+        
+        memcpy(cart+f11_h1_ptr, f11_h1_data, sizeof(f11_h1_data));
+        memcpy(cart+f11_h2_ptr, f11_h2_data, sizeof(f11_h2_data));
+        memcpy(cart+f11_h3_ptr, f11_h3_data, sizeof(f11_h3_data));
+        
+        cart[f11_h3_ptr] = blocks - 4; // set free blocks
+    }
+    
+    if (basic2) { // Transform to BASIC 2.0 format
+        // bootloader
+        cart[0x04] = 0x6C;
+        cart[0x05] = 0xCA;
+        
+        cart[0x08] = 0xD4;
+        cart[0x09] = 0xA4;
+        
+        cart[0x0C] = 0x02;
+        cart[0x0D] = 0x0D;
+        
+        cart[0x38] = 0x1C;
+        cart[0x39] = 0xA0;
+        
+        if (blocks >= 5) {
+            // header 1
+            cart[f11_h1_ptr+0x04] = 0x50;
+            
+            // header 2
+            cart[f11_h2_ptr+0x06] = 0x02;
+            
+            // header 3
+            cart[f11_h3_ptr+0x07] = 0x00;
+            cart[f11_h3_ptr+0x08] = 0x00;
+            cart[f11_h3_ptr+0x09] = 0x08;
+        }
+    }
+}
+
+#endif

@@ -1,0 +1,77 @@
+	; #####################################################
+	; MPO-Unmounter for XMCart90 [universal]
+	; Working from the MPO-10's bootloader zone 
+	; by Bs0Dd [bs0dd.net], 2025-2026
+	; #####################################################
+
+	.ENABL AMA ; Absolute addressing
+	.ASECT ; Absolute section
+	.= 0 ; Beginning of cartridge
+	NOP ; Obligatory!
+
+
+	; -------------------------------
+	; 	C o n s t a n t s
+	; -------------------------------
+
+	SMPCMD = 164026
+	SMPBAUD = 164022
+	SMPCS = 164024
+	SMPIO = 164020
+
+
+	; ----------------------------
+	;    M  a  i  n
+	; ----------------------------
+
+start:
+	mov #1, r4
+	xor r4, r5 ; Switch to another SMP
+	mov #11, @#SMPBAUD ; CONST: transfer rate
+	mov #SMPCS, r1 ; CONST: control/status register
+	mov #WAITCOM, r2 ; CONST: procedure 'wait for the transfer completed'
+
+umount:
+	bis #10, r5 ; CMD: writing to the SMP
+	mov r5, (r1)
+	mov #362, @#SMPCMD ; CMD: 0xF2 Unmount File
+	call (r2)
+	tst @#SMPCMD ; End of the transfer
+	call (r2)
+
+waitrdy:
+	mov #376, @#SMPCMD ; CMD: 0xFE Status code register
+	call (r2)
+	bic #10, r5 ; CMD: reading from the SMP
+	mov r5, (r1)
+	call (r2)
+	movb @#SMPIO, r4
+	tst @#SMPCMD ; End of the transfer
+	call (r2)
+	bis #10, r5 ; CMD: writing to the SMP
+	mov r5, (r1)
+	cmpb r4, #377 ; Not ready - try again
+	bne boot
+
+TINYDLY: ; Tiny delay
+	mov #77777, r0
+waiting:
+	sob r0, waiting
+	br waitrdy
+
+boot:
+	cmpb @#115252, #62 ; BASIC 2.0?
+	bne boot10
+	jmp @#174204 ; Boot from XMCart90 (B2.0)
+boot10:
+	jmp @#174210 ; Boot from XMCart90 (B1.0)
+
+
+WAITCOM: ; Wait while transfer in progress
+	tstb (r1)
+	bpl WAITCOM
+	rts pc
+
+.= 224
+END: ; Unmounter end - pad to make entire image 512 bytes long
+	.word 0

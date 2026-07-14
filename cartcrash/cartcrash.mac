@@ -1,0 +1,121 @@
+	; XMCart90 Crash Informer
+	; Version 1.0
+	; Bs0Dd [bs0dd.net], 2026
+
+	.ENABL AMA ; Absolute addressing
+	.ASECT ; Absolute section
+	.= 0 ; Beginning of cartridge
+	NOP ; Obligatory!
+	
+	cmpb @#115252, #62 ; BASIC 2.0? (sec. vectors set)
+	bne bas1
+	mov #SPRATTRS, r1
+	mov #PRINTATTRS, r5
+	mov #7, r2
+b2a:
+	mov (r1)+, (r5)+
+	sob r2, b2a
+
+bas1:
+	br main
+
+	; -------------------------------
+	; 	C o n s t a n t s
+	; -------------------------------
+
+	; Screen controller
+	LCDINA = 164000 ; Screen RAM pointer
+	LCDINB = 164002 ; Controller config
+	
+	; -------------------------------
+	; 	OS-dependent constants
+	; -------------------------------
+
+;addresses for BASIC 1.0 (used by default)
+PRINTATTRS:
+	.word 34072
+PRINT:
+	.word 153414
+INITRAM:
+	.word 153700
+INITTTY:
+	.word 120536
+SCRPTR:
+	.word 34022
+CURSX:
+	.word 34044
+CURSY:
+	.word 33726
+	
+;addresses for BASIC 2.0
+SPRATTRS:
+	.word 6534
+SPRINT:
+	.word 160372
+SINITRAM:
+	.word 145154
+SINITTTY:
+	.word 122324
+SSCRPTR:
+	.word 6402
+SCURSX:
+	.word 6506
+SCURSY:
+	.word 6120
+
+	; -------------------------------
+	; 	Main code
+	; -------------------------------
+
+main:
+	call @INITRAM ; OS initialisation
+	mov #30000, @SCRPTR
+
+	mov #27476, sp ; Move stack to nearly end of RAM
+
+	call @INITTTY
+
+	; LCD controller initialisation
+	mov @SCRPTR, @#LCDINA
+	mov #104306, @#LCDINB
+
+	bis #41, @PRINTATTRS ; Black background
+
+	clr @CURSX ; X=0
+	clr @CURSY ; Y=0
+
+	; Print the Title
+	mov #cartTitle, r1
+	call @PRINT
+	
+	bic #41, @PRINTATTRS
+	
+	mov #line1, r1
+	call @PRINT
+	
+	mov #lineMsg, r1
+	call @PRINT
+	
+	mov #line2, r1
+	call @PRINT
+	
+haltp:
+	br haltp
+
+
+	; ----------------------------
+	; 	Strings
+	; ----------------------------
+
+cartTitle:
+	.asciz \  XMCart90 Crashed  \
+line1:
+	.asciz <12>\SMP emu-sys error:\<12><15>
+line2:
+	.ascii <12><12><15>\Permanent USB active\
+	.asciz \Cart reset required\
+lineMsg:
+	.byte 0 ; to be placed by XMCart90
+	
+.=376
+	.word 0

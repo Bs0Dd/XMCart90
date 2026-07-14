@@ -1,0 +1,124 @@
+	; #####################################################
+	; Unmounter creation tool for XMCart90 [universal]
+	; Writing Unmounter to the MPO-10's bootloader zone 
+	; by Bs0Dd [bs0dd.net], 2025-2026
+	; #####################################################
+
+	.ENABL AMA ; Absolute addressing
+	.ASECT ; Absolute section
+	.= 0 ; Beginning of cartridge
+	NOP ; Obligatory!
+
+
+	; -------------------------------
+	; 	C o n s t a n t s
+	; -------------------------------
+
+	; Screen controller
+	LCDINA = 164000 ; Controller config
+	LCDINB = 164002 ; Screen RAM pointer
+
+	; Serial controller (keyboard, SMP)
+	SMPCMD = 164026 ; Command port
+	SMPBAUD = 164022 ; Baudrate port
+	SMPCS = 164024 ; Config and status port
+	SMPIO = 164020 ; Input/Output port
+
+
+	; ----------------------------
+	;    M  a  i  n
+	; ----------------------------
+
+start:
+	; LCD controller initialisation
+	mov #30000, @#LCDINA
+	mov #104306, @#LCDINB
+
+	mov #11, @#SMPBAUD ; CONST: transfer rate
+	mov #SMPCS, r1 ; CONST: control/status register
+	mov #WAITCOMM, r2 ; CONST: procedure 'wait for the transfer completed'
+
+	mov #UMTBIN, r3 ; Unmounter start
+	mov #1, r4
+	xor r4, r5 ; Switch to another SMP
+	bis #10, r5 ; CMD: writing to the SMP
+	mov r5, (r1)
+	mov #240, @#SMPCMD ; Write Address
+	call (r2)
+	clr @#SMPIO ; High address byte = 0
+	call (r2)
+	clr @#SMPIO ; Low address byte = 0
+	call (r2)
+	tst @#SMPCMD
+	call (r2)
+	mov #300, @#SMPCMD ; Write Postincrement
+	call (r2)
+sendoop:
+	movb (r3), @#SMPIO
+	call (r2)
+	inc r3
+	cmp r3, #776 ; Exclude stack
+	bne sendoop
+	tst @#SMPCMD
+	call (r2)
+
+	mov #30000, r0
+	mov #740, r1
+clrscr: ; Clear VIDEO zone
+	clr (r0)+
+	sob r1, clrscr
+
+	mov #30132, r0
+	mov #BitMap, r1
+	mov #UMTBIN, r3
+	clr r2
+bcopy: ; Copy a bitmap into VIDEO zone
+	movb (r1)+, (r0)+
+	inc r0
+	inc r2
+	cmp r2, #12
+	bne brdrchk
+	add r2, r0
+	clr r2
+brdrchk:
+	cmp r3, r1
+	bne bcopy
+
+	mov #4, r1
+bigwait:
+	mov #177777, r0
+waiting:
+	sob r0, waiting
+	sob r1, bigwait
+
+exit:
+	jmp @#173000 ; Reboot!
+
+WAITCOM: ; Wait while transfer in progress
+	tstb (r1)
+	bpl WAITCOM
+	rts pc
+
+BitMap: ; Succesfull creation bitmap (only even bytes)
+	.byte 037 377 377 377 374 000 000 000 000 000 
+	.byte 020 000 000 000 004 000 000 000 000 006
+	.byte 020 000 377 337 344 000 000 000 000 016
+	.byte 020 000 374 120 047 000 000 000 000 014 
+	.byte 021 124 254 120 047 300 000 000 000 030 
+	.byte 021 124 264 120 047 100 300 000 000 030 
+	.byte 023 124 367 320 047 101 300 000 000 060
+	.byte 023 124 354 320 047 103 200 000 000 160
+	.byte 023 124 254 320 047 103 000 000 100 140 
+	.byte 027 124 355 320 047 107 377 370 340 300
+	.byte 027 124 367 320 047 107 377 370 160 300
+	.byte 023 124 364 320 047 103 000 000 071 200
+	.byte 023 124 366 320 047 103 200 000 035 200
+	.byte 023 124 274 320 047 101 300 000 017 000
+	.byte 021 124 257 320 047 100 300 000 007 000 
+	.byte 021 124 274 320 047 300 000 000 002 000
+	.byte 020 000 344 320 047 000 000 000 000 000 
+	.byte 020 000 377 337 344 000 000 000 000 000
+	.byte 020 000 000 000 004 000 000 000 000 000
+	.byte 037 377 377 377 374 000
+
+UMTBIN: ; Unmounter will be appended here
