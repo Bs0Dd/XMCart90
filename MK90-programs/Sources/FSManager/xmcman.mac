@@ -95,15 +95,13 @@ b2a:
 
 bas1:
 	call @INITRAM ; OS initialisation
-	mov #30000, @SCRPTR
+	mov #30000, @SCRPTR ; Screen memory always at 30000 
 
-	call @#SETCONST
-	mov (sp)+, r5
-
+	mov (sp), r5
 	mov #STACKA, sp ; Move stack to nearly end of RAM
-
 	mov r5, -(sp) ; Save current SMP slot number
 
+	call @#SETCONST
 	call @#LOADR ; Load full data
 
 
@@ -565,6 +563,7 @@ ASKFIL: ; Ask a filename from the user
 	clr @CURSX
 	inc @DISIND
 	mov #fnaBuf, r4
+	clr @#dszPar+2
 	call @#INASCI ; Let the user input file name
 	clrb (r4)
 	rts pc
@@ -576,7 +575,7 @@ LEVSUB: ; Leave sub-program
 	clr @#TOTALF
 	mov #STACKA-2, sp ; Stack reset
 	mov (sp), r5
-	br backpnt
+	jmp @#backpnt
 
 INASCI: ; Prompt an ASCII string from the user
 	mov r4, r3
@@ -632,11 +631,17 @@ chrdel:
 	br waitkey
 backbt:
 	cmpb r2, #ASCBAK ; Back - cancel
+	bne entbt
+	tst @#dszPar+2 ; Page input cancel if not 0
 	beq LEVSUB
+	clr @#dszPar+2
+	br inpend
+entbt:
 	cmpb r2, #ASCENT ; VK key?
 	bne anyspec
 	cmp r3, r4 ; Empty buf? no...
 	beq waitkey
+inpend:
 	clr (r0)
 	mov (sp)+, r1
 	clr (r1)+
@@ -668,7 +673,11 @@ kdisp:
 	cmp r4, r5 ; String limit?
 	bgt waitkey
 	call @PUTCH ; Display character r2
-	movb	r2, (r4)+
+	movb r2, (r4)+
+	tst @#dszPar+2
+	beq waitkey
+	cmp r4, r5
+	bgt inpend
 	br waitkey
 
 	; ----------------------------
@@ -844,10 +853,13 @@ spage: ; Select page
 	clrb @#STATEX
 	mov #fszBuf, r4
 	mov #fszBuf+1, r5
+	mov #177777, @#dszPar+2
 	call @#INASCI ; Let the user input page number
 	inc @DISCURS
 	clr @DISIND
 	mov #KEYINT, @#KVADRR
+	tst @#dszPar+2 ; If page input was cancelled?
+	beq spend
 	clrb (r4)
 	call @#ATOB
 	tst r3
@@ -955,6 +967,7 @@ getsiz:
 	mov #fszBuf, r4
 	mov #fszBuf+1, r5
 	clrb @#STATEX
+	clr @#dszPar+2
 	call @#INASCI ; Let the user input file size
 	clrb (r4)
 	call @#ATOB
@@ -1209,19 +1222,16 @@ cartTms:
 	.asciz <12>\wSEGO PAMQTI:\<12><15>
 cartFms:
 	.asciz \sWOBODNO:\<12><15>
-cartFlbl:
-	.asciz <12><15>\fAJL: \<17>
 cartAbu:
 	.asciz <17>\ TEID-Soft (c) 2026\
-cartFco:
-	.asciz <16><12><12><15>\fAJL PRIMONTIROWAN!\
-
-fstNLTB: ; Scancodes for keys 1-6 (fast file select)
-	.byte 043, 103, 143, 203, 243, 047
 
 
 .= 10000 ; 6000-7777 block is in use by BASIC 2.0
 
+cartFlbl:
+	.asciz <12><15>\fAJL: \<17>
+cartFco:
+	.asciz <16><12><12><15>\fAJL PRIMONTIROWAN!\
 cartRfo:
 	.asciz <16><12><12><15>\fAJL PEREIMENOWAN!\<17>
 cartDfo:
@@ -1255,6 +1265,8 @@ cartEB:
 cartGF:
 	.asciz \nEIZWESTNYJ SBOJ\
 
+	.even
+
 errLTB: ; Error string lookup table
 	.word cartE0, cartE1, cartE2, cartE3, cartE4, cartE5
 	.word cartE6, cartE7, cartE8, cartE9, cartEA, cartEB
@@ -1262,6 +1274,9 @@ errLTB: ; Error string lookup table
 forbChr: ; Forbidden ASCII characters for filename
 	.byte 056, 040, 042, 052, 053, 054, 057, 072, 073
 	.byte 074, 075, 076, 077, 133, 134, 135, 174, 000
+
+fstNLTB: ; Scancodes for keys 1-6 (fast file select)
+	.byte 043, 103, 143, 203, 243, 047
 
 
 .= 10776 ; Padding to 3.5KB

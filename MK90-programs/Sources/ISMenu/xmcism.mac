@@ -70,15 +70,13 @@ b2a:
 
 bas1:
 	call @INITRAM ; OS initialisation
-	mov #30000, @SCRPTR
+	mov #30000, @SCRPTR ; Screen memory always at 30000 
 
-	call @#SETCONST
-	mov (sp)+, r5
-
+	mov (sp), r5
 	mov #STACKA, sp ; Move stack to nearly end of RAM
-
 	mov r5, -(sp) ; Save current SMP slot number
 
+	call @#SETCONST
 	call @#LOADR ; Load full data
 
 
@@ -568,12 +566,10 @@ smera:
 	br smilop
 smleve:
 	cmpb r3, #KEYLEFT ; Leave
-	bne smlok
+	bne sminxs
 	inc @DISCURS
 	br spend
-smlok:
-	cmp r0, #2
-	beq smilop ; Only 2 characters
+sminxs:
 	clr r2
 sminxt:
 	cmpb r3, fstNLTB(r2)
@@ -587,7 +583,8 @@ smadd:
 	movb r2, (r4)+
 	inc r0
 	call @PUTCH
-	br smilop
+	cmp r0, #2 ; Leave after 2 characters inserted
+	bne smilop
 smend:
 	inc @DISCURS
 	clrb (r4)
@@ -679,8 +676,6 @@ LISTN: ; List number
 	.byte 1
 LISTT: ; Total lists
 	.byte 1
-STATEX: ; Return status expected
-	.byte 0
 
 fszBuf: ; Page number input buffer (2 digits)
 	.blkb 3

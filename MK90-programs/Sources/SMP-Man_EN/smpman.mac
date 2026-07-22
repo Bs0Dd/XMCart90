@@ -96,15 +96,13 @@ b2a:
 
 bas1:
 	call @INITRAM ; OS initialisation
-	mov #30000, @SCRPTR
+	mov #30000, @SCRPTR ; Screen memory always at 30000 
 
-	call @#SETCONST
-	mov (sp)+, r5
-
+	mov (sp), r5
 	mov #STACKA, sp ; Move stack to nearly end of RAM
-
 	mov r5, -(sp) ; Save current SMP slot number
 
+	call @#SETCONST
 	mov #END-774, r4 ; Number of bytes
 	mov #774, r3
 	call @#LOADR ; Load full data
@@ -510,7 +508,7 @@ LEVSUB: ; Leave sub-program
 	clr @#TOTALF
 	mov #STACKA-2, sp ; Stack reset
 	mov (sp), r5
-	br backpnt
+	jmp @#backpnt
 
 INASCI: ; Prompt an ASCII string from the user
 	mov r4, r3
@@ -566,11 +564,17 @@ chrdel:
 	br waitkey
 backbt:
 	cmpb r2, #ASCBAK ; Back - cancel
+	bne entbt
+	tst @#dszPar+2 ; Page input cancel if not 0
 	beq LEVSUB
+	clr @#dszPar+2
+	br inpend
+entbt:
 	cmpb r2, #ASCENT ; VK key?
 	bne anyspec
 	cmp r3, r4 ; Empty buf? no...
 	beq waitkey
+inpend:
 	clr (r0)
 	mov (sp)+, r1
 	clr (r1)+
@@ -599,7 +603,11 @@ kdisp:
 	cmp r4, r5 ; String limit?
 	bgt waitkey
 	call @PUTCH ; Display character r2
-	movb	r2, (r4)+
+	movb r2, (r4)+
+	tst @#dszPar+2
+	beq waitkey
+	cmp r4, r5
+	bgt inpend
 	br waitkey
 
 	; ----------------------------
@@ -788,7 +796,7 @@ doent:
 	call @#EMUSEL
 	clr @#STATEX
 	bis #41, @PRINTATTRS
-	br DOWRITE
+	jmp @#DOWRITE
 mleave: ; Leave to main menu
 	cmpb r3, #KEYBKSP
 	bne spage
@@ -806,10 +814,13 @@ spage: ; Select page
 	clrb @#STATEX
 	mov #fszBuf, r4
 	mov #fszBuf+1, r5
+	mov #177777, @#dszPar+2
 	call @#INASCI ; Let the user input page number
 	inc @DISCURS
 	clr @DISIND
 	mov #KEYINT, @#KVADRR
+	tst @#dszPar+2 ; If page input was cancelled?
+	beq spend
 	clrb (r4)
 	call @#ATOB
 	tst r3
@@ -969,6 +980,7 @@ MPORED: ; MPO reading sub-program
 	movb #1, @#STATEX
 	clr @CURSX
 	inc @DISIND
+	clr @#dszPar+2
 	call @#INASCI ; Let the user input file name
 	clrb (r4)
 	mov (sp), r5
@@ -1020,6 +1032,7 @@ getsiz:
 	mov #fszBuf, r4
 	mov #fszBuf+1, r5
 	clrb @#STATEX
+	clr @#dszPar+2
 	call @#INASCI ; Let the user input zone size
 	clrb (r4)
 	call @#ATOB
@@ -1054,8 +1067,8 @@ fnaBuf: ; File name input buffer (new file / rename)
 	.blkb 11
 fszBuf: ; File size / page number input buffer (2 digits)
 	.blkb 3
-dszPar: ; INASCI special variable
-	.word 0
+dszPar: ; INASCI special variables
+	.word 0, 0
 araKbs: ; SMP area size (KB blocks)
 	.byte 12
 
@@ -1065,7 +1078,7 @@ TTBUF: ; Total pages ASCII
 	.asciz \00\
 
 TTSTR: ; Progress string
-	.ascii \  Transfrd 00/\
+	.ascii \  Transfr. 00/\
 TTKIB: ; Total KB ASCII
 	.asciz \00KB  \
 
@@ -1075,7 +1088,7 @@ cartMenu:
 	.ascii <12>\1. Image --> Cartr. \
 	.ascii \2. Cartr. --> Image \
 	.ascii \3. Custom area size \
-	.ascii \4. Exit from MemMan\<12><12><15>
+	.ascii \4. Exit\<12><12><15>
 	.asciz \ TEID-Soft (c) 2026\
 cartNfl:
 	.asciz \NO FILES\
